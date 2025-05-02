@@ -1,79 +1,130 @@
 [NEAT]
+# معيار تقييم الأداء (نريد تحقيق أقصى لياقة ممكنة)
 fitness_criterion     = max
-fitness_threshold     = 10000
-pop_size              = 30
+# الحد الأدنى لللياقة لوقف التدريب (إذا وصل أي كائن إلى 10000 نقطة يتوقف)
+fitness_threshold     = 1000000
+# عدد الكائنات في كل جيل (هنا 30 ديناصور في كل جيل)
+pop_size              = 100
+# إعادة تهيئة الأنواع إذا انقرضت جميعها (تفادي توقف التطور)
 reset_on_extinction   = True
 
 [DefaultGenome]
-# node activation options
+### خيارات تنشيط العقد ###
+# دالة التنشيط الافتراضية (tanh تعطي نتائج بين -1 و1)
 activation_default      = tanh
+# معدل تحوير دالة التنشيط (0 = لا يوجد تحوير)
 activation_mutate_rate  = 0.0
+# خيارات دوال التنشيط المتاحة (هنا tanh فقط)
 activation_options      = tanh
 
-# node aggregation options
+### خيارات تجميع المدخلات ###
+# طريقة تجميع إشارات المدخلات (الجمع)
 aggregation_default     = sum
+# معدل تحوير طريقة التجميع
 aggregation_mutate_rate = 0.0
+# خيارات طرق التجميع المتاحة
 aggregation_options     = sum
 
-# node bias options
+### خيارات الانحياز (Bias) ###
+# متوسط القيمة الابتدائية للانحياز
 bias_init_mean          = 0.0
+# الانحراف المعياري للقيمة الابتدائية
 bias_init_stdev         = 1.0
-bias_max_value          = 30.0
+# القيمة العظمى للانحياز
+bias_max_value          = 100.0
+# القيمة الصغرى للانحياز
 bias_min_value          = -30.0
+# قوة تحوير الانحياز (حجم التغيير)
 bias_mutate_power       = 0.5
+# معدل تحوير الانحياز (70 فرصة للتحوير)
 bias_mutate_rate        = 0.7
+# معدل استبدال الانحياز بقيمة عشوائية
 bias_replace_rate       = 0.1
 
-# genome compatibility options
+### خيارات توافق الجينوم ###
+# معامل العقود غير المتطابقة (يزيد الاختلاف بين الشبكات)
 compatibility_disjoint_coefficient = 1.0
+# معامل أوزان الاتصالات (يقلل الاختلاف)
 compatibility_weight_coefficient   = 0.5
 
-# connection add/remove rates
+### معدلات إضافة/حذف الاتصالات ###
+# احتمالية إضافة اتصال جديد (50)
 conn_add_prob           = 0.5
+# احتمالية حذف اتصال موجود (50)
 conn_delete_prob        = 0.5
 
-# connection enable options
+### خيارات تفعيل الاتصالات ###
+# هل الاتصالات مفعلة افتراضيًا؟
 enabled_default         = True
+# معدل تحوير حالة التفعيل (1)
 enabled_mutate_rate     = 0.01
-
+# هل الشبكة تغذوية أمامية (لا توجد حلقات عكسية)
 feed_forward            = True
+# نوع الاتصالات الابتدائية (كاملة = كل المدخلات متصلة بالمخارج)
 initial_connection      = full
 
-# node add/remove rates
+### معدلات إضافة/حذف العقد ###
+# احتمالية إضافة عقدة جديدة (20)
 node_add_prob           = 0.2
+# احتمالية حذف عقدة موجودة (20)
 node_delete_prob        = 0.2
 
-# network parameters
+### معايير الشبكة ###
+# عدد الطبقات المخفية (0 = لا يوجد طبقات مخفية)
 num_hidden              = 0
+# عدد المدخلات (2: موقع الديناصور + بعد العقبة)
 num_inputs              = 2
+# عدد المخارج (1: قرار القفز)
 num_outputs             = 1
 
-# node response options
-response_init_mean      = 1.0
-response_init_stdev     = 0.0
-response_max_value      = 30.0
+### خيارات استجابة العقد ###
+# متوسط الاستجابة الابتدائية
+response_init_mean      = 1.0  
+# انحراف معياب صفر (قيم ثابتة)
+response_init_stdev     = 0.0  
+# أقصى استجابة
+response_max_value      = 30.0 
+# أدنى استجابة
 response_min_value      = -30.0
-response_mutate_power   = 0.0
-response_mutate_rate    = 0.0
-response_replace_rate   = 0.0
+# لا يوجد تحوير للاستجابة
+response_mutate_power   = 0.0  
+# لا يوجد تحوير للاستجابة
+response_mutate_rate    = 0.0  
+# لا يوجد استبدال للاستجابة
+response_replace_rate   = 0.0  
 
-# connection weight options
-weight_init_mean        = 0.0
-weight_init_stdev       = 1.0
-weight_max_value        = 30
-weight_min_value        = -30
-weight_mutate_power     = 0.5
-weight_mutate_rate      = 0.8
-weight_replace_rate     = 0.1
+
+### خيارات أوزان الاتصالات ###
+# متوسط الوزن الابتدائي
+weight_init_mean        = 0.0  
+# توزيع الأوزان الابتدائية
+weight_init_stdev       = 1.0  
+# أقصى وزن مسموح
+weight_max_value        = 30   
+# أدنى وزن مسموح
+weight_min_value        = -30  
+# قوة تحوير الأوزان
+weight_mutate_power     = 0.5  
+# معدل تحوير الأوزان (80)
+weight_mutate_rate      = 0.8  
+# معدل استبدال الأوزان (10)
+weight_replace_rate     = 0.1  
+
 
 [DefaultSpeciesSet]
+# الحد الأدنى للاختلاف بين نوعين (كل شبكة تختلف بأكثر من 3 تصبح نوعًا جديدًا)
 compatibility_threshold = 3.0
 
 [DefaultStagnation]
+# دالة تقييم لياقة النوع (نأخذ أفضل لياقة في النوع)
 species_fitness_func = max
+# عدد الأجيال المسموح بها دون تحسن قبل انقراض النوع
 max_stagnation       = 20
+# عدد الأنواع المحفوظة دائمًا (أفضل نوعين)
 species_elitism      = 2
 
 [DefaultReproduction]
+# عدد الكائنات المنسوخة مباشرة إلى الجيل التالي (أفضل كائنين)
 elitism            = 2
+# نسبة الكائنات التي تبقى من كل نوع (أفضل 20)
 survival_threshold = 0.2
