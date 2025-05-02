@@ -17,6 +17,8 @@ BACKGROUND_Y = 380
 INITIAL_GAME_SPEED = 20
 NUMBER_OF_GENERATIONS = 500
 
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+
 class Assets:
     
     @staticmethod
@@ -44,6 +46,7 @@ Assets.load()
 
 class Dinosaur:
     def __init__(self, image=Assets.RUNNING[0]):
+        
         self.image = image
         self.dino_run = True
         self.dino_jump = False
@@ -61,6 +64,7 @@ class Dinosaur:
             self.step_index = 0
     
     def jump(self):
+        
         self.image = Assets.JUMPING
         
         if self.dino_jump:
@@ -79,6 +83,7 @@ class Dinosaur:
         self.step_index += 1
     
     def draw(self, screen):
+        
         screen.blit(self.image, (self.rect.x, self.rect.y))
         pygame.draw.rect(screen, self.color, self.rect, 2)
         
@@ -89,6 +94,7 @@ class Dinosaur:
 
 class Obstacle:
     def __init__(self, image, number_of_cacti):
+        
         self.image = image
         self.type = number_of_cacti
         self.rect = self.image[self.type].get_rect()
@@ -99,6 +105,7 @@ class Obstacle:
         return self.rect.x < -self.rect.width  # Returns True if off-screen
     
     def draw(self, screen):
+        
         screen.blit(self.image[self.type], self.rect)
 
 class SmallCactus(Obstacle):
@@ -121,7 +128,7 @@ class GameState:
     game_speed = INITIAL_GAME_SPEED
     x_pos_bg = 0
     y_pos_bg = BACKGROUND_Y
-    spawn_cooldown = 1000  # ms
+    spawn_cooldown = 2000  # ms
     last_spawn_time = 0
     population = None
 
@@ -172,8 +179,9 @@ def draw_background(screen):
     GameState.x_pos_bg -= GameState.game_speed
 
 def spawn_obstacle():
+    
     current_time = pygame.time.get_ticks()
-    if len(GameState.obstacles) < 3 and current_time - GameState.last_spawn_time+random.randint(0,600)  > GameState.spawn_cooldown:
+    if len(GameState.obstacles) < 3 and current_time - GameState.last_spawn_time+random.randint(100,1500)  > GameState.spawn_cooldown:
         if random.randint(0, 1) == 0:
             GameState.obstacles.append(SmallCactus(Assets.SMALL_CACTUS, random.randint(0, 2)))
         else:
@@ -183,7 +191,7 @@ def spawn_obstacle():
 def eval_genomes(genomes, config):
     GameState.reset()
     clock = pygame.time.Clock()
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    
     
     # Initialize NEAT population
     for genome_id, genome in genomes:
@@ -193,12 +201,9 @@ def eval_genomes(genomes, config):
         genome.fitness = 0
 
     while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-        
-        # Clear screen
+        if not GameState.dinosaurs:
+            break
+
         screen.fill((255, 255, 255))
         
         # Game logic
@@ -219,6 +224,7 @@ def eval_genomes(genomes, config):
                 if dinosaur.rect.colliderect(obstacle.rect):
                     GameState.gen_pool[i].fitness -= 1
                     remove_dinosaur(i)
+                    
         
         # AI decision making
         for i, dinosaur in enumerate(GameState.dinosaurs):
@@ -241,6 +247,7 @@ def eval_genomes(genomes, config):
         clock.tick(FPS)
 
 def run(config_path):
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     config = neat.config.Config(
         neat.DefaultGenome,
         neat.DefaultReproduction,
