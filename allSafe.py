@@ -1,4 +1,5 @@
 import glob
+import logging
 import pygame
 import os
 import random
@@ -240,7 +241,15 @@ class DownBird(Bird):
         super().__init__()
         self.rect.y = 225
 
-    
+  
+def save_checkpoint(population, generation,config):
+    neat.checkpoint.Checkpointer.save_checkpoint(
+        filename=f"checkpoint-{generation}",
+        population=population,
+        generation=generation,
+        config=config
+    )
+  
 
 def handle_collisions():
     to_remove = set()
@@ -426,7 +435,6 @@ def eval_genomes(genomes, config):
     GameState.current_generation += 1
     print(f"\n--- Starting Generation {GameState.current_generation} ---")
     
-    
     # Initialize NEAT population
     for genome_id, genome in genomes:
         dino = Dinosaur(genome_id=genome_id, genome=genome, config=config)
@@ -436,68 +444,85 @@ def eval_genomes(genomes, config):
         genome.fitness = 0
 
     running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-                
-        pygame.display.update()
-        clock.tick(FPS)
-        if not GameState.dinosaurs:
-            break
+    try:
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                    
+            pygame.display.update()
+            clock.tick(FPS)
+            if not GameState.dinosaurs:
+                break
 
-        SCREEN.fill((255, 255, 255))
-        
-        # --- 1. Update All Game Objects First ---
-        for dinosaur in GameState.dinosaurs:
-            dinosaur.update()
-        
-        # Obstacle management
-        spawn_obstacle()
-        GameState.obstacles = [obstacle for obstacle in GameState.obstacles if not obstacle.update()]
-        
-        # --- 2. Handle Collisions (REPLACES your manual collision check) ---
-        handle_collisions()  # This now handles ALL collision logic
-        
-        # --- 3. AI Decisions  ---
-        for i, dinosaur in enumerate(GameState.dinosaurs):
-            if GameState.obstacles:
-                closest_obstacle = GameState.obstacles[0]
-                output = GameState.nets[i].activate((
-                    dinosaur.rect.y,
-                    closest_obstacle.rect.x - dinosaur.rect.x,
-                    closest_obstacle.rect.height,
-                    closest_obstacle.rect.width,
-                    GameState.game_speed,
-                    closest_obstacle.rect.y
-                ))
-                
-                if output[0] > 0.5 and dinosaur.rect.y == DINO_Y_POS:
-                    dinosaur.dino_jump = True
-                    dinosaur.dino_run = False
-
-                if output[1] > 0.5 and not dinosaur.dino_jump:
-                    dinosaur.dino_crouch = True
-                else:
-                    dinosaur.dino_crouch = False
-        
-        # --- 4. Single Fitness Reward Point ---
-        for i, dinosaur in enumerate(GameState.dinosaurs):
-            if not dinosaur.invincible:
-                GameState.gen_pool[i].fitness += 0.2 + 0.2 * (GameState.game_speed / 100)  # Combined into one reward
-        
-        # --- 5. Drawing Phase ---
-        for dinosaur in GameState.dinosaurs:
-            dinosaur.draw(SCREEN)
+            SCREEN.fill((255, 255, 255))
             
-        for obstacle in GameState.obstacles:
-            obstacle.draw(SCREEN)
+            if GameState.current_generation % 30 == 3 :
+                save_checkpoint(GameState.population, GameState.current_generation, config)
+                print(f"Checkpoint saved for generation {GameState.current_generation}")
+                
+            
+            
+            # --- 1. Update All Game Objects First ---
+            for dinosaur in GameState.dinosaurs:
+                dinosaur.update()
+            
+            # Obstacle management
+            spawn_obstacle()
+            GameState.obstacles = [obstacle for obstacle in GameState.obstacles if not obstacle.update()]
+            
+            # --- 2. Handle Collisions (REPLACES your manual collision check) ---
+            handle_collisions()  # This now handles ALL collision logic
+            
+            # --- 3. AI Decisions  ---
+            for i, dinosaur in enumerate(GameState.dinosaurs):
+                if GameState.obstacles:
+                    closest_obstacle = GameState.obstacles[0]
+                    output = GameState.nets[i].activate((
+                        dinosaur.rect.y,
+                        closest_obstacle.rect.x - dinosaur.rect.x,
+                        closest_obstacle.rect.height,
+                        closest_obstacle.rect.width,
+                        GameState.game_speed,
+                        closest_obstacle.rect.y
+                    ))
+                    
+                    if output[0] > 0.5 and dinosaur.rect.y == DINO_Y_POS:
+                        dinosaur.dino_jump = True
+                        dinosaur.dino_run = False
+
+                    if output[1] > 0.5 and not dinosaur.dino_jump:
+                        dinosaur.dino_crouch = True
+                    else:
+                        dinosaur.dino_crouch = False
+            
+            # --- 4. Single Fitness Reward Point ---
+            for i, dinosaur in enumerate(GameState.dinosaurs):
+                if not dinosaur.invincible:
+                    GameState.gen_pool[i].fitness += 0.2 + 0.2 * (GameState.game_speed / 100)  # Combined into one reward
+            
+            # --- 5. Drawing Phase ---
+            for dinosaur in GameState.dinosaurs:
+                dinosaur.draw(SCREEN)
+                
+            for obstacle in GameState.obstacles:
+                obstacle.draw(SCREEN)
+            
+            statistics(SCREEN)
+            score(SCREEN)
+            draw_background(SCREEN)
         
-        statistics(SCREEN)
-        score(SCREEN)
-        draw_background(SCREEN)
-    
-    save_generation_data(GameState.current_generation, genomes)
+            save_generation_data(GameState.current_generation, genomes)
+    except Exception as e:
+        print(f"Error during evaluation: {e}")
+        save_generation_data(GameState.current_generation, genomes)
+        # Clean up and exit
+        pygame.quit()
+        exit()
+    finally:
+        pygame.quit()
+        exit()
+        
 
 def run(config_path):
     config = neat.config.Config(
@@ -527,6 +552,7 @@ def run(config_path):
         print(f"You can find its data in: {os.path.join(SAVE_DIR, f'gen_{best_gen[0]}', 'best_dino.json')}")
 
 if __name__ == '__main__':
+    logging.basicConfig(filename='training.log', level=logging.INFO)
     local_dir = os.path.dirname(__file__) if '__file__' in globals() else os.getcwd()
     config_path = os.path.join(local_dir, 'config.txt')
     
