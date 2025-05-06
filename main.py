@@ -11,6 +11,9 @@ from file_manger import move_and_rename
 from gamestate import GameState
 from utils import draw_background, handle_collisions, save_generation_data, score, spawn_obstacle, statistics
 
+#أقرا readme.md
+
+
 # Initialize pygame and load assets before anything else
 pygame.init()
 
@@ -221,6 +224,7 @@ def run(config_path):
 
 
 if __name__ == '__main__':
+    #أقرا readme.md
     local_dir = os.path.dirname(__file__) if '__file__' in globals() else os.getcwd()
     config_path = os.path.join(local_dir, 'config.txt')
     

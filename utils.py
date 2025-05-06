@@ -47,7 +47,6 @@ def spawn_obstacle(GameState):
     current_time = pygame.time.get_ticks()
     spawn_delay = GameState.spawn_cooldown - GameState.game_speed * 0.7 + random.randint(-50, 500)
     if len(GameState.obstacles)==0 or current_time - GameState.last_spawn_time > max(900, spawn_delay):
-        print(current_time - GameState.last_spawn_time)
         obstacle= random.choice([SmallCactus, LargeCactus, UpBird, DownBird])
         if obstacle == SmallCactus:
             for _ in range(random.randint(1, 3)):

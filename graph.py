@@ -71,8 +71,8 @@ def plot_best_fitness_per_generation(new_name=None):
 
 if __name__ == "__main__":
     
-    # for dic in os.listdir(OLD_DIR):
-    #     if os.path.isdir(os.path.join(OLD_DIR, dic)):
-    #         print(f"Processing directory: {dic}")
-            #   plot_best_fitness_per_generation(os.path.join(OLD_DIR, dic))
-    plot_best_fitness_per_generation()
+    for dic in os.listdir(OLD_DIR):
+        if os.path.isdir(os.path.join(OLD_DIR, dic)):
+            print(f"Processing directory: {dic}")
+            plot_best_fitness_per_generation(os.path.join(OLD_DIR, dic))
+    # plot_best_fitness_per_generation()

@@ -177,19 +177,10 @@ def list_available_genomes(base_dir):
     return available_gens
 
 def main():
-    parser = argparse.ArgumentParser(description='Test specific NEAT dinosaur genomes')
-    parser.add_argument('--list', action='store_true', help='List all available generations and genomes')
-    parser.add_argument('--gen', type=int, help='Specify generation to test')
-    parser.add_argument('--id', type=int, help='Specify genome ID to test')
-    parser.add_argument('--best', action='store_true', help='Test the best genome from the specified generation')
-    parser.add_argument('--savedir', type=str, default='dino_saves', help='Directory containing saved genomes')
-    
-    args = parser.parse_args()
     
     # Set up paths
     local_dir = os.path.dirname(__file__) if '__file__' in globals() else os.getcwd()
     config_path = os.path.join(local_dir, 'config.txt')
-    save_dir = os.path.join(local_dir, args.savedir)
     
     # Load NEAT configuration
     try:
@@ -204,52 +195,7 @@ def main():
         print(f"Error loading NEAT configuration: {e}")
         return
     
-    # List available genomes
-    available_gens = list_available_genomes(save_dir)
-    
-    if args.list or (not args.gen and not args.id):
-        print("\n=== Available Dinosaur Genomes ===")
-        if not available_gens:
-            print("No saved genomes found!")
-            return
-            
-        for gen_num, gen_data in sorted(available_gens.items()):
-            print(f"\nGeneration {gen_num}:")
-            print(f"  Best Genome: ID {gen_data['best_genome_id']} (Fitness: {gen_data['best_fitness']:.2f}, Score: {gen_data['best_score']})")
-            print(f"  Available Genomes: {len(gen_data['genomes'])} genomes")
-            if len(gen_data['genomes']) <= 10:
-                print(f"  IDs: {', '.join(map(str, gen_data['genomes']))}")
-            else:
-                print(f"  IDs: {', '.join(map(str, gen_data['genomes'][:10]))}, ... ({len(gen_data['genomes']) - 10} more)")
-        
-        print("\nTo test a specific dinosaur, use: python test_dino.py --gen <generation> --id <genome_id>")
-        print("To test the best dinosaur from a generation, use: python test_dino.py --gen <generation> --best")
-        return
-    
-    # Validate generation
-    if args.gen is not None and args.gen not in available_gens:
-        print(f"Generation {args.gen} not found!")
-        return
-    
-    # Determine which genome to test
-    genome_id = None
-    gen_num = args.gen
-    
-    if args.best and args.gen is not None:
-        genome_id = available_gens[args.gen]['best_genome_id']
-        print(f"Testing best genome (ID: {genome_id}) from generation {args.gen}")
-    elif args.id is not None and args.gen is not None:
-        if args.id not in available_gens[args.gen]['genomes']:
-            print(f"Genome ID {args.id} not found in generation {args.gen}!")
-            return
-        genome_id = args.id
-        print(f"Testing genome ID {genome_id} from generation {args.gen}")
-    else:
-        print("Please specify a generation and either --best or --id <genome_id>")
-        return
-    
-    # Load the genome
-    genome_path = os.path.join(available_gens[gen_num]['path'], f"dino_{genome_id}.json")
+    genome_path = os.path.join(local_dir, 'Best_one.json')
     genome, fitness, saved_score = load_genome_from_file(genome_path, config)
     
     if genome is None:
@@ -262,7 +208,7 @@ def main():
     net = neat.nn.FeedForwardNetwork.create(genome, config)
     
     # Create dinosaur object
-    dino = Dinosaur(genome_id=genome_id, genome=genome, config=config)
+    dino = Dinosaur(genome_id=-1, genome=genome, config=config)
     
     # Run game loop
     clock = pygame.time.Clock()
