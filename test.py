@@ -1,273 +1,280 @@
-import math
-import random
-import pygame
+import sys
 import os
-import json
+import pygame
 import neat
-from neat.nn import FeedForwardNetwork
+import json
+import argparse
+from datetime import datetime
+from assets import Assets
+from const import DINO_Y_POS, FPS, SCREEN
+from dinosaur import Dinosaur
+from gamestate import GameState
+from utils import draw_background, handle_collisions, score, spawn_obstacle, statistics
 
-# Initialize pygame
+# Initialize pygame and load assets
 pygame.init()
-
-# Constants (should match your training constants)
-SCREEN_WIDTH, SCREEN_HEIGHT = 1200, 900
-FPS = 30
-DINO_X_POS, DINO_Y_POS = 80, 310
-JUMP_VELOCITY = 8.5
-BACKGROUND_Y = 380
-INITIAL_GAME_SPEED = 20
-SAVE_DIR = "dino_saves"
-
-SCREEN = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-
-class Assets:
-    @staticmethod
-    def load():
-        Assets.RUNNING = {
-            0: pygame.image.load(os.path.join("Assets/Dino", "DinoRun1.png")),
-            1: pygame.image.load(os.path.join("Assets/Dino", "DinoRun2.png"))
-        }
-        Assets.JUMPING = pygame.image.load(os.path.join("Assets/Dino", "DinoJump.png"))
-        Assets.SMALL_CACTUS = {
-            0: pygame.image.load(os.path.join("Assets/Cactus", "SmallCactus1.png")),
-            1: pygame.image.load(os.path.join("Assets/Cactus", "SmallCactus2.png")),
-            2: pygame.image.load(os.path.join("Assets/Cactus", "SmallCactus3.png"))
-        }
-        Assets.LARGE_CACTUS = {
-            0: pygame.image.load(os.path.join("Assets/Cactus", "LargeCactus1.png")),
-            1: pygame.image.load(os.path.join("Assets/Cactus", "LargeCactus2.png")),
-            2: pygame.image.load(os.path.join("Assets/Cactus", "LargeCactus3.png"))
-        }
-        Assets.BACKGROUND = pygame.image.load(os.path.join("Assets/Other", "Track.png"))
-        Assets.FONT = pygame.font.Font('freesansbold.ttf', 20)
-
 Assets.load()
 
-class Dinosaur:
-    def __init__(self, genome=None, config=None):
-        self.image = Assets.RUNNING[0]
-        self.dino_run = True
-        self.dino_jump = False
-        self.jump_vel = JUMP_VELOCITY
-        self.rect = pygame.Rect(DINO_X_POS, DINO_Y_POS, self.image.get_width(), self.image.get_height())
-        self.color = (0, 255, 0)  # Green for the best dino
-        self.step_index = 0
-        self.genome = genome
-        self.net = FeedForwardNetwork.create(genome, config) if genome and config else None
-        self.fitness = 0
-    
-    def update(self):
-        if self.dino_run:
-            self.run()
-        if self.dino_jump:
-            self.jump()
-        if self.step_index >= 10:
-            self.step_index = 0
-    
-    def jump(self):
-        self.image = Assets.JUMPING
-        
-        if self.dino_jump:
-            self.rect.y -= self.jump_vel * 4
-            self.jump_vel -= 0.8
-        
-        if self.jump_vel <= -JUMP_VELOCITY:
-            self.dino_jump = False
-            self.dino_run = True
-            self.jump_vel = JUMP_VELOCITY
-            
-    def run(self):
-        self.image = Assets.RUNNING[self.step_index // 5]
-        self.rect.x = DINO_X_POS
-        self.rect.y = DINO_Y_POS
-        self.step_index += 1
-    
-    def draw(self, SCREEN):
-        SCREEN.blit(self.image, (self.rect.x, self.rect.y))
-        pygame.draw.rect(SCREEN, self.color, (self.rect.x, self.rect.y, self.rect.width, self.rect.height), 2)
+def draw_fitness_value(SCREEN, fitness):
+    """Display current fitness value on screen"""
+    text = Assets.FONT.render(f"Fitness: {int(fitness)}", True, (0, 0, 0))
+    SCREEN.blit(text, (50, 50))
 
-class Obstacle:
-    def __init__(self, image, number_of_cacti):
-        self.image = image
-        self.type = number_of_cacti
-        self.rect = self.image[self.type].get_rect()
-        self.rect.x = SCREEN_WIDTH
-
-    def update(self, game_speed):
-        self.rect.x -= game_speed
-        return self.rect.x < -self.rect.width
-    
-    def draw(self, SCREEN):
-        SCREEN.blit(self.image[self.type], self.rect)
-
-class SmallCactus(Obstacle):
-    def __init__(self, image, number_of_cacti):
-        super().__init__(image, number_of_cacti)
-        self.rect.y = 325
-
-class LargeCactus(Obstacle):
-    def __init__(self, image, number_of_cacti):
-        super().__init__(image, number_of_cacti)
-        self.rect.y = 300
-
-def distance(pos_a, pos_b):
-    dx = pos_a[0] - pos_b[0]
-    dy = pos_a[1] - pos_b[1]
-    return math.sqrt(dx**2 + dy**2)
-
-def load_best_dino(config_path):
-    # Load the config file
-    config = neat.config.Config(
-        neat.DefaultGenome,
-        neat.DefaultReproduction,
-        neat.DefaultSpeciesSet,
-        neat.DefaultStagnation,
-        config_path
-    )
-    
-    # Find the best generation
-    summary_path = os.path.join(SAVE_DIR, "generations_summary.json")
-    if not os.path.exists(summary_path):
-        raise FileNotFoundError("No generations summary found. Train the AI first.")
-    
-    with open(summary_path) as f:
-        generations = json.load(f)
-    
-    if not generations:
-        raise ValueError("No generations data available.")
-    
-    # Get the best generation
-    best_gen = max(generations.items(), key=lambda x: x[1]['fitness'])
-    gen_num, best_data = best_gen
-    print(f"Loading best dinosaur from generation {gen_num} with fitness {best_data['fitness']}")
-    
-    # Load the genome
-    gen_dir = os.path.join(SAVE_DIR, f"gen_{gen_num}")
-    best_dino_path = os.path.join(gen_dir, "best_dino.json")
-    
-    with open(best_dino_path) as f:
-        dino_data = json.load(f)
-    
-    # Recreate the genome
-    genome = neat.DefaultGenome(dino_data['genome_id'])
-    genome.fitness = dino_data['fitness']
-    
-    # Recreate nodes with all attributes
-    for node_data in dino_data['nodes']:
-        node_id = node_data['id']
-        genome.nodes[node_id] = neat.genome.DefaultNodeGene(node_id)
-        genome.nodes[node_id].bias = node_data['bias']
-        genome.nodes[node_id].activation = node_data['activation']
-        genome.nodes[node_id].aggregation = node_data['aggregation']
-        genome.nodes[node_id].response = node_data['response']
-    
-    # Recreate connections
-    for conn_data in dino_data['connections']:
-        key = (conn_data['in'], conn_data['out'])
-        genome.connections[key] = neat.genome.DefaultConnectionGene(key)
-        genome.connections[key].weight = conn_data['weight']
-        genome.connections[key].enabled = conn_data['enabled']
-    
-    return genome, config
-
-def test_best_dino():
-    # Load NEAT config
-    local_dir = os.path.dirname(__file__)
-    config_path = os.path.join(local_dir, 'config.txt')
-    
+def load_genome_from_file(genome_path, config):
+    """Load a genome from a saved JSON file"""
     try:
-        genome, config = load_best_dino(config_path)
+        with open(genome_path, 'r') as f:
+            genome_data = json.load(f)
+        
+        # Create a new genome object
+        genome = neat.DefaultGenome(genome_data['genome_id'])
+        
+        # Set up nodes
+        for node_data in genome_data['nodes']:
+            node_id = node_data['id']
+            genome.nodes[node_id] = neat.genome.DefaultNodeGene(node_id)
+            genome.nodes[node_id].bias = node_data['bias']
+            genome.nodes[node_id].response = node_data['response']
+            genome.nodes[node_id].activation = node_data['activation']
+            genome.nodes[node_id].aggregation = node_data['aggregation']
+        
+        # Set up connections
+        for conn_data in genome_data['connections']:
+            key = (conn_data['in'], conn_data['out'])
+            genome.connections[key] = neat.genome.DefaultConnectionGene(key)
+            genome.connections[key].weight = conn_data['weight']
+            genome.connections[key].enabled = conn_data['enabled']
+        
+        return genome, genome_data['fitness'], genome_data['score']
     except Exception as e:
-        print(f"Error loading best dinosaur: {e}")
-        return
+        print(f"Error loading genome: {e}")
+        return None, 0, 0
+
+def AI_play_single(dinosaur, net, obstacles, game_speed):
+    """Handle AI decision making for a single dinosaur"""
+    if obstacles:
+        first = obstacles[0]
+        second = obstacles[1] if len(obstacles) > 1 else first
+        
+        output = net.activate((
+            dinosaur.rect.y,
+            first.rect.x - dinosaur.rect.x,
+            first.rect.height,
+            first.rect.width,
+            first.rect.y,
+            second.rect.x - dinosaur.rect.x,
+            second.rect.height,
+            second.rect.width,
+            second.rect.y,
+            game_speed,
+        ))
+        
+        if output[0] > 0.3 and dinosaur.rect.y == DINO_Y_POS:
+            dinosaur.dino_jump = True
+            dinosaur.dino_run = False
+        if output[1] > 0.5 and not dinosaur.dino_jump:
+            dinosaur.dino_crouch = True
+        else:
+            dinosaur.dino_crouch = False
+
+def test_dino_game_loop(clock, dino, net):
+    """Run game loop for testing a specific dinosaur"""
+    GameState.reset()
+    GameState.dinosaurs = [dino]
+    current_fitness = 0
     
-    # Create the best dinosaur
-    best_dino = Dinosaur(genome, config)
-    
-    # Game state
-    obstacles = []
-    points = 0
-    game_speed = INITIAL_GAME_SPEED
-    x_pos_bg = 0
-    y_pos_bg = BACKGROUND_Y
-    spawn_cooldown = 2000  # ms
-    last_spawn_time = 0
-    clock = pygame.time.Clock()
-    running = True
-    
-    while running:
+    while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    best_dino.dino_jump = True
-                    best_dino.dino_run = False
-        
-        SCREEN.fill((255, 255, 255))
-        
-        # Spawn obstacles
-        current_time = pygame.time.get_ticks()
-        if len(obstacles) < 3 and current_time - last_spawn_time + random.randint(100, 1500) > spawn_cooldown:
-            if random.randint(0, 1) == 0:
-                obstacles.append(SmallCactus(Assets.SMALL_CACTUS, random.randint(0, 2)))
-            else:
-                obstacles.append(LargeCactus(Assets.LARGE_CACTUS, random.randint(0, 2)))
-            last_spawn_time = current_time
-        
-        # Update obstacles
-        obstacles = [obstacle for obstacle in obstacles if not obstacle.update(game_speed)]
-        
-        # AI decision making
-        if best_dino.net and obstacles:
-            output = best_dino.net.activate((
-                best_dino.rect.y,
-                distance((best_dino.rect.x, best_dino.rect.y),
-                         obstacles[0].rect.midtop)
-            ))
-            if output[0] > 0.5 and best_dino.rect.y == DINO_Y_POS:
-                best_dino.dino_jump = True
-                best_dino.dino_run = False
-        
-        # Update dinosaur
-        best_dino.update()
-        
-        # Check for collisions
-        for obstacle in obstacles:
-            if best_dino.rect.colliderect(obstacle.rect):
-                print(f"Game Over! Score: {points}")
-                running = False
-        
-        # Score
-        points += 1
-        if points % 100 == 0:
-            game_speed += 1
-        
-        # Draw everything
-        for obstacle in obstacles:
-            obstacle.draw(SCREEN)
-        
-        best_dino.draw(SCREEN)
-        
-        # Draw background
-        image_width = Assets.BACKGROUND.get_width()
-        SCREEN.blit(Assets.BACKGROUND, (x_pos_bg, y_pos_bg))
-        SCREEN.blit(Assets.BACKGROUND, (image_width + x_pos_bg, y_pos_bg))
-        
-        if x_pos_bg <= -image_width:
-            x_pos_bg = 0
-        x_pos_bg -= game_speed
-        
-        # Draw UI
-        text_points = Assets.FONT.render(f"Points: {points}", True, (0, 0, 0))
-        text_speed = Assets.FONT.render(f"Speed: {game_speed}", True, (0, 0, 0))
-        SCREEN.blit(text_points, (950, 50))
-        SCREEN.blit(text_speed, (950, 80))
+                pygame.quit()
+                return -1
+            
+            # Allow manual control with spacebar to test interaction
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    return -1
         
         pygame.display.update()
         clock.tick(FPS)
+        SCREEN.fill((255, 255, 255))
+        
+        # Update game objects
+        sco = score(SCREEN, GameState)
+        dino.update(sco)
+        
+        # Obstacle management
+        spawn_obstacle(GameState)
+        GameState.obstacles = [obstacle for obstacle in GameState.obstacles if not obstacle.update(GameState.game_speed)]
+        
+        # Handle collisions
+        if handle_collisions(GameState, True):
+            text = Assets.FONT.render("Game Over", True, (0, 0, 0))
+            SCREEN.blit(text, (SCREEN.get_width() // 2 - text.get_width() // 2, 
+                             SCREEN.get_height() // 2 - text.get_height() // 2))
+            pygame.display.update()
+            pygame.time.delay(2000)
+            return GameState.points
+        
+        # AI decisions
+        AI_play_single(dino, net, GameState.obstacles, GameState.game_speed)
+        
+        # Update fitness
+        current_fitness += 0.2 + 0.2 * (GameState.game_speed / 100)
+        
+        # Drawing
+        dino.draw(SCREEN, GameState.obstacles)
+        for obstacle in GameState.obstacles:
+            obstacle.draw(SCREEN)
+            
+        draw_fitness_value(SCREEN, current_fitness)
+        statistics(SCREEN, GameState)
+        score(SCREEN, GameState)
+        draw_background(SCREEN, GameState)
+
+def list_available_genomes(base_dir):
+    """List all available genomes by generation"""
+    available_gens = {}
     
-    pygame.quit()
+    if not os.path.exists(base_dir):
+        print(f"Save directory '{base_dir}' not found!")
+        return available_gens
+    
+    # Get all generation directories
+    for item in os.listdir(base_dir):
+        gen_dir = os.path.join(base_dir, item)
+        if os.path.isdir(gen_dir) and item.startswith("gen_"):
+            gen_num = int(item.split("_")[1])
+            
+            # Read generation data
+            gen_data_path = os.path.join(gen_dir, "generation_data.json")
+            if os.path.exists(gen_data_path):
+                try:
+                    with open(gen_data_path, 'r') as f:
+                        gen_data = json.load(f)
+                        
+                    best_genome_id = gen_data.get('highest_fitness_genome_id', -1)
+                    best_fitness = gen_data.get('highest_fitness', 0)
+                    best_score = gen_data.get('score', 0)
+                    
+                    # Get all dinosaur genomes in this generation
+                    genomes = []
+                    for file in os.listdir(gen_dir):
+                        if file.startswith("dino_") and file.endswith(".json"):
+                            genome_id = int(file.replace("dino_", "").replace(".json", ""))
+                            genomes.append(genome_id)
+                    
+                    available_gens[gen_num] = {
+                        'path': gen_dir,
+                        'best_genome_id': best_genome_id,
+                        'best_fitness': best_fitness,
+                        'best_score': best_score,
+                        'genomes': sorted(genomes)
+                    }
+                except Exception as e:
+                    print(f"Error reading generation {gen_num}: {e}")
+    
+    return available_gens
+
+def main():
+    parser = argparse.ArgumentParser(description='Test specific NEAT dinosaur genomes')
+    parser.add_argument('--list', action='store_true', help='List all available generations and genomes')
+    parser.add_argument('--gen', type=int, help='Specify generation to test')
+    parser.add_argument('--id', type=int, help='Specify genome ID to test')
+    parser.add_argument('--best', action='store_true', help='Test the best genome from the specified generation')
+    parser.add_argument('--savedir', type=str, default='dino_saves', help='Directory containing saved genomes')
+    
+    args = parser.parse_args()
+    
+    # Set up paths
+    local_dir = os.path.dirname(__file__) if '__file__' in globals() else os.getcwd()
+    config_path = os.path.join(local_dir, 'config.txt')
+    save_dir = os.path.join(local_dir, args.savedir)
+    
+    # Load NEAT configuration
+    try:
+        config = neat.config.Config(
+            neat.DefaultGenome,
+            neat.DefaultReproduction,
+            neat.DefaultSpeciesSet,
+            neat.DefaultStagnation,
+            config_path
+        )
+    except Exception as e:
+        print(f"Error loading NEAT configuration: {e}")
+        return
+    
+    # List available genomes
+    available_gens = list_available_genomes(save_dir)
+    
+    if args.list or (not args.gen and not args.id):
+        print("\n=== Available Dinosaur Genomes ===")
+        if not available_gens:
+            print("No saved genomes found!")
+            return
+            
+        for gen_num, gen_data in sorted(available_gens.items()):
+            print(f"\nGeneration {gen_num}:")
+            print(f"  Best Genome: ID {gen_data['best_genome_id']} (Fitness: {gen_data['best_fitness']:.2f}, Score: {gen_data['best_score']})")
+            print(f"  Available Genomes: {len(gen_data['genomes'])} genomes")
+            if len(gen_data['genomes']) <= 10:
+                print(f"  IDs: {', '.join(map(str, gen_data['genomes']))}")
+            else:
+                print(f"  IDs: {', '.join(map(str, gen_data['genomes'][:10]))}, ... ({len(gen_data['genomes']) - 10} more)")
+        
+        print("\nTo test a specific dinosaur, use: python test_dino.py --gen <generation> --id <genome_id>")
+        print("To test the best dinosaur from a generation, use: python test_dino.py --gen <generation> --best")
+        return
+    
+    # Validate generation
+    if args.gen is not None and args.gen not in available_gens:
+        print(f"Generation {args.gen} not found!")
+        return
+    
+    # Determine which genome to test
+    genome_id = None
+    gen_num = args.gen
+    
+    if args.best and args.gen is not None:
+        genome_id = available_gens[args.gen]['best_genome_id']
+        print(f"Testing best genome (ID: {genome_id}) from generation {args.gen}")
+    elif args.id is not None and args.gen is not None:
+        if args.id not in available_gens[args.gen]['genomes']:
+            print(f"Genome ID {args.id} not found in generation {args.gen}!")
+            return
+        genome_id = args.id
+        print(f"Testing genome ID {genome_id} from generation {args.gen}")
+    else:
+        print("Please specify a generation and either --best or --id <genome_id>")
+        return
+    
+    # Load the genome
+    genome_path = os.path.join(available_gens[gen_num]['path'], f"dino_{genome_id}.json")
+    genome, fitness, saved_score = load_genome_from_file(genome_path, config)
+    
+    if genome is None:
+        print("Failed to load genome!")
+        return
+    
+    print(f"Loaded genome with fitness {fitness:.2f} and score {saved_score}")
+    
+    # Create neural network
+    net = neat.nn.FeedForwardNetwork.create(genome, config)
+    
+    # Create dinosaur object
+    dino = Dinosaur(genome_id=genome_id, genome=genome, config=config)
+    
+    # Run game loop
+    clock = pygame.time.Clock()
+    final_score = test_dino_game_loop(clock, dino, net)
+    
+    if final_score != -1:
+        print(f"Test complete! Final score: {final_score}")
 
 if __name__ == '__main__':
-    test_best_dino()
+    main()
+    
+    
+# خله يثبت الشاشة لو خسر
+# نظف الأوامر
+# سو شرح لتشغيل

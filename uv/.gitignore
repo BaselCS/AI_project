@@ -5,9 +5,9 @@ build/
 dist/
 wheels/
 *.egg-info
+old_saves/
+dino_saves/
+*.log
 *.json
-*.zip
-*.rar
-
 # Virtual environments
 .venv
